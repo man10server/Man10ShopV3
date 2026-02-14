@@ -53,6 +53,9 @@ cp config/config.example.json config/config.json
 - `hostPort`
 - 必要に応じて `api.endpoint` / `api.key`
 
+`config.example.json` は Docker Compose 向けに `mongodb://mongodb:27017` を使っています。  
+ローカル実行時は必要に応じて `mongodb://localhost:27017` に変更してください。
+
 ## 起動
 
 ```bash

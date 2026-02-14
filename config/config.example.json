@@ -1,6 +1,6 @@
 {
   "hostPort": 8000,
-  "mongodbConnectionString": "mongodb://localhost:27017",
+  "mongodbConnectionString": "mongodb://mongodb:27017",
   "communicationMode": "socket",
   "man10socket": {
     "hosts": [

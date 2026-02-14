@@ -69,4 +69,8 @@ class CommandHandler:
                 "schema": registering_commands[registering_commands_name],
                 "target": target
             }
-            self.main.connection_handler.get_socket(target).send_message(schema)
+            socket_connection = self.main.connection_handler.get_socket(target)
+            if socket_connection is None:
+                print("Socket not connected for command register:", target)
+                return
+            socket_connection.send_message(schema)

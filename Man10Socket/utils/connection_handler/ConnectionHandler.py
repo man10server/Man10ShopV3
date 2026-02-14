@@ -38,8 +38,10 @@ class ConnectionHandler:
             self.sockets[socket_id] = Connection(self, client_socket, socket_id=socket_id, mode="server", name=name)
             self.same_name_sockets[name].append(socket_id)
             return client_socket
-        except Exception as e:
-            print(e)
+        except OSError as e:
+            print(f"Socket open failed ({name} {host}:{port}): {e}")
+            return None
+        except Exception:
             traceback.print_exc()
             return None
 
@@ -69,7 +71,19 @@ class ConnectionHandler:
     def get_socket(self, name: str) -> Connection | None:
         if name not in self.same_name_sockets:
             return None
-        import random
-        rand = random.randint(0, len(self.same_name_sockets[name]) - 1)
-        return self.sockets[self.same_name_sockets[name][rand]]
+        socket_ids = self.same_name_sockets[name]
+        if len(socket_ids) == 0:
+            return None
 
+        # Clean up stale ids that no longer exist in self.sockets.
+        valid_socket_ids = [socket_id for socket_id in socket_ids if socket_id in self.sockets]
+        if len(valid_socket_ids) != len(socket_ids):
+            if len(valid_socket_ids) == 0:
+                del self.same_name_sockets[name]
+                return None
+            self.same_name_sockets[name] = valid_socket_ids
+
+        import random
+        rand = random.randint(0, len(valid_socket_ids) - 1)
+        socket_id = valid_socket_ids[rand]
+        return self.sockets.get(socket_id)
