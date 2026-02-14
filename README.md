@@ -59,6 +59,20 @@ cp config/config.example.json config/config.json
 uv run python main.py
 ```
 
+## Docker buildx
+
+マルチアーキ（`linux/amd64,linux/arm64`）のビルドスクリプトを用意しています。
+
+```bash
+./scripts/docker-buildx.sh --push -i shojabon/man10shopv3 -t latest
+```
+
+ローカルに取り込む場合（`--load`）は単一アーキのみ指定してください。
+
+```bash
+./scripts/docker-buildx.sh --load -p linux/amd64 -i man10shopv3-dev -t local
+```
+
 ## 補足
 
 - 依存定義は `pyproject.toml`、ロックは `uv.lock` を利用します。
