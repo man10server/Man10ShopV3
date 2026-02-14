@@ -1,25 +1,21 @@
-version: "3.9"
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: man10shopv3
     depends_on:
       mongodb:
         condition: service_healthy
+      man10socket-mock:
+        condition: service_started
     ports:
       - "8000:8000"
     volumes:
-      - ./config/config.json:/man10shopv3/config/config.json:ro
+      - ./config:/man10shopv3/config:ro
     restart: unless-stopped
 
   mongodb:
     image: mongo:7
-    container_name: man10shopv3-mongodb
-    ports:
-      - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -28,6 +24,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    restart: unless-stopped
+
+  man10socket-mock:
+    image: busybox:1.36
+    command: ["sh", "-c", "nc -lk -p 3000 >/dev/null"]
     restart: unless-stopped
 
 volumes:

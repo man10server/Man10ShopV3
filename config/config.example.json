@@ -6,7 +6,7 @@
     "hosts": [
       {
         "name": "man10",
-        "host": "127.0.0.1",
+        "host": "man10socket-mock",
         "port": 3000
       }
     ]

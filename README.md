@@ -73,6 +73,22 @@ uv run python main.py
 ./scripts/docker-buildx.sh --load -p linux/amd64 -i man10shopv3-dev -t local
 ```
 
+## Docker Compose (サンプル)
+
+`docker-compose.yaml` には起動確認用の `man10socket-mock` サービスを含めています。  
+実運用時は `config/config.json` の `man10socket.hosts` を実サーバー向けに変更してください。
+
+## Docker 起動トラブルシュート
+
+`.venv/bin/python: no such file or directory` が出る場合は、古いイメージを使っている可能性があります。  
+以下で再ビルドしてください。
+
+```bash
+docker compose down
+docker compose build --no-cache app
+docker compose up -d
+```
+
 ## 補足
 
 - 依存定義は `pyproject.toml`、ロックは `uv.lock` を利用します。
