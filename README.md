@@ -78,8 +78,8 @@ uv run python main.py
 
 ## Docker Compose (サンプル)
 
-`docker-compose.yaml` には起動確認用の `man10socket-mock` サービスを含めています。  
-実運用時は `config/config.json` の `man10socket.hosts` を実サーバー向けに変更してください。
+`docker-compose.yaml` は `app` と `mongodb` のみ起動します。  
+`config/config.json` の `man10socket.hosts` は実サーバー向けに変更してください。
 
 ## Docker 起動トラブルシュート
 
