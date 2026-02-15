@@ -1,0 +1,31 @@
+{
+  "hostPort": 8000,
+  "mongodbConnectionString": "mongodb://mongodb:27017",
+  "communicationMode": "socket",
+  "man10socket": {
+    "hosts": [
+      {
+        "name": "man10",
+        "host": "minecraft",
+        "port": 6789
+      }
+    ]
+  },
+  "queue": {
+    "size": 8,
+    "rateLimit": 0
+  },
+  "batching": {
+    "setVariableBatchSeconds": 1
+  },
+  "api": {
+    "endpoint": "https://{endpoint}",
+    "key": "replace_me"
+  },
+  "defaultVariables": {
+    "storage": {
+      "storageSizeMax": 3456,
+      "storageSlotPrice": 100
+    }
+  }
+}

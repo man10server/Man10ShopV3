@@ -1,0 +1,8 @@
+.venv/
+.uv-cache/
+.uv-python/
+__pycache__/
+*.pyc
+
+# Local runtime config
+config/config.json

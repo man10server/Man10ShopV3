@@ -1,0 +1,24 @@
+services:
+  man10shopv3:
+    image: man10shop:local
+    volumes:
+      - ./man10shop/config:/man10shopv3/config:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  mongodb:
+    image: mongo:7
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand({ ping: 1 }).ok' | mongosh --quiet mongodb://localhost:27017/test | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  mongodb_data:

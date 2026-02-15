@@ -67,7 +67,11 @@ class GUIHandler:
         gui.gui_handler = self
         gui.target = player.get_uuid() # change to server name
         self.__active_sessions[session_id] = gui
-        a = self.main.connection_handler.get_socket("Man10Socket").send_message({
+        socket_connection = self.main.connection_handler.get_socket("Man10Socket")
+        if socket_connection is None:
+            print("Socket not connected: Man10Socket")
+            return None
+        a = socket_connection.send_message({
             "target": player.get_uuid(),
             "player": player.get_uuid(),
             "type": "gui_open",
@@ -82,7 +86,11 @@ class GUIHandler:
         if gui.session_id not in self.__active_sessions:
             return False
         test = gui.get_json(updated_only=True)
-        a = self.main.connection_handler.get_socket("Man10Socket").send_message({
+        socket_connection = self.main.connection_handler.get_socket("Man10Socket")
+        if socket_connection is None:
+            print("Socket not connected: Man10Socket")
+            return False
+        a = socket_connection.send_message({
             "type": "gui_update",
             "target": target,
             "id": gui.session_id,

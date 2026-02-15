@@ -22,7 +22,11 @@ class Player:
         self.__main.gui_handler.open_gui(self, gui)
 
     def send_message(self, message: str, send_async: bool = False):
-        return self.__main.connection_handler.get_socket("Man10Socket").send_message({
+        socket_connection = self.__main.connection_handler.get_socket("Man10Socket")
+        if socket_connection is None:
+            print("Socket not connected: Man10Socket")
+            return None
+        return socket_connection.send_message({
             "type": "player_tell",
             "target": self.__uuid,
             "player": self.__uuid,

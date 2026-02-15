@@ -79,8 +79,11 @@ class Man10Socket:
 
     def send_message(self, target: str, message: dict, reply: bool = False, callback: typing.Callable = None, reply_timeout: int = 1,
                      reply_arguments: typing.Tuple = None):
-        return self.connection_handler.get_socket(target).send_message(message, reply, callback, reply_timeout,
-                                                                              reply_arguments)
+        socket_connection = self.connection_handler.get_socket(target)
+        if socket_connection is None:
+            print("Socket not connected:", target)
+            return None
+        return socket_connection.send_message(message, reply, callback, reply_timeout, reply_arguments)
 
     def set_session_name(self, target: str, session_name: str):
         self.session_name = session_name
