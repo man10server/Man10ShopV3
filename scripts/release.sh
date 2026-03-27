@@ -13,7 +13,6 @@ TAG="v${VERSION}"
 
 echo "==> Building and pushing ${IMAGE}:${VERSION} (linux/amd64,linux/arm64)"
 
-# Ensure buildx builder exists
 BUILDER="man10shop-multiarch"
 if ! docker buildx inspect "$BUILDER" &>/dev/null; then
   docker buildx create --name "$BUILDER" --use
@@ -21,7 +20,6 @@ else
   docker buildx use "$BUILDER"
 fi
 
-# Build and push multi-arch image
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --tag "${IMAGE}:${VERSION}" \
@@ -31,7 +29,6 @@ docker buildx build \
 
 echo "==> Pushed ${IMAGE}:${VERSION} and ${IMAGE}:latest"
 
-# Create GitHub release tag
 if git rev-parse "$TAG" &>/dev/null; then
   echo "==> Git tag ${TAG} already exists, skipping"
 else
@@ -40,7 +37,6 @@ else
   echo "==> Created and pushed git tag ${TAG}"
 fi
 
-# Create GitHub release
 if gh release view "$TAG" &>/dev/null; then
   echo "==> GitHub release ${TAG} already exists, skipping"
 else

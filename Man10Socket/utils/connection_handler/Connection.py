@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import socket
+import struct
 import threading
 import traceback
 import typing
@@ -23,6 +24,9 @@ class Connection:
 
     REPLY_STATE_TTL_SECONDS = 30
     DEFAULT_REPLY_TIMEOUT_SECONDS = 5
+    LEGACY_DELIMITER = b"<E>"
+    DEFAULT_FRAMING_PROTOCOL = "delimiter_v1"
+    DEFAULT_MAX_FRAME_BYTES = 1024 * 1024
 
     def __init__(self, main: ConnectionHandler, socket_object: socket.socket, socket_id: str, mode: str = "server",
                  name: str = None):
@@ -71,8 +75,15 @@ class Connection:
         self.functions[socket_function.function_type] = socket_function
 
     def __send_message_internal(self, message: dict):
-        message_string = json.dumps(message, ensure_ascii=False) + "<E>"
-        self.socket_object.sendall(message_string.encode('utf-8'))
+        payload = json.dumps(message, ensure_ascii=False).encode("utf-8")
+        if len(payload) > self.main.max_frame_bytes:
+            raise ValueError(f"Outgoing frame too large: {len(payload)} > {self.main.max_frame_bytes}")
+
+        if self.main.framing_protocol == "length_prefix_v2":
+            message_bytes = struct.pack("!I", len(payload)) + payload
+        else:
+            message_bytes = payload + self.LEGACY_DELIMITER
+        self.socket_object.sendall(message_bytes)
 
     def send_message(self, message: dict, reply: bool = False, callback: Callable = None,
                      reply_timeout: int | None = None,
@@ -115,6 +126,34 @@ class Connection:
     def send_reply_message(self, status: str, message, reply_id: str):
         self.send_message({"type": "reply", "replyId": reply_id, "data": message, "status": status})
 
+    def _extract_next_message(self, buffer: bytes) -> tuple[bytes | None, bytes]:
+        if self.main.framing_protocol == "length_prefix_v2":
+            if len(buffer) < 4:
+                return None, buffer
+
+            frame_length = struct.unpack("!I", buffer[:4])[0]
+            if frame_length > self.main.max_frame_bytes:
+                raise ValueError(f"Incoming frame too large: {frame_length} > {self.main.max_frame_bytes}")
+
+            frame_end = 4 + frame_length
+            if len(buffer) < frame_end:
+                return None, buffer
+
+            return buffer[4:frame_end], buffer[frame_end:]
+
+        delimiter_index = buffer.find(self.LEGACY_DELIMITER)
+        if delimiter_index == -1:
+            if len(buffer) > self.main.max_frame_bytes + len(self.LEGACY_DELIMITER):
+                raise ValueError(f"Incoming frame exceeded max size without delimiter: {len(buffer)}")
+            return None, buffer
+
+        if delimiter_index > self.main.max_frame_bytes:
+            raise ValueError(f"Incoming frame too large: {delimiter_index} > {self.main.max_frame_bytes}")
+
+        frame = buffer[:delimiter_index]
+        remainder = buffer[delimiter_index + len(self.LEGACY_DELIMITER):]
+        return frame, remainder
+
     def receive_messages(self):
         buffer = b""
         while True:
@@ -122,26 +161,20 @@ class Connection:
                 data = self.socket_object.recv(2**10)
                 if not data:
                     break
-                if data:
-                    buffer += data
-                    while b"<E>" in buffer:
-                        message, buffer = buffer.split(b"<E>", 1)
-                        try:
+                buffer += data
+                while True:
+                    message, buffer = self._extract_next_message(buffer)
+                    if message is None:
+                        break
+                    try:
+                        def task(message_object):
+                            json_message = json.loads(message_object.decode('utf-8'))
+                            self.handle_message(json_message)
 
-                            # print(json_message)
-                            def task(message_object):
-                                json_message = json.loads(message_object.decode('utf-8'))
-                                self.handle_message(json_message)
-
-                            self.executor.submit(task, message)
-
-                            # self.handle_message(json_message)
-
-                        except Exception as e:
-                            print(message)
-                            traceback.print_exc()
-                else:
-                    break
+                        self.executor.submit(task, message)
+                    except Exception:
+                        print(message)
+                        traceback.print_exc()
             except Exception as e:
                 print("Error receiving data:", e)
                 traceback.print_exc()
