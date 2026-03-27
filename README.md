@@ -50,6 +50,7 @@ cp config/config.example.json config/config.json
 
 - `mongodbConnectionString`
 - `man10socket.hosts`
+- 必要に応じて `man10socket.replyStateTtlSeconds` / `man10socket.defaultReplyTimeoutSeconds`
 - `hostPort`
 - 必要に応じて `api.endpoint` / `api.key`
 

@@ -24,7 +24,10 @@ class CommandHandler:
             data = message.get("data")
             if data is None:
                 return
-            command_event = CommandEvent(self.main.get_player(data.get("player")), data.get("command"))
+            command_event = CommandEvent(
+                self.main.get_player(data.get("player"), message.get("server")),
+                data.get("command")
+            )
             choices = []
             for command in self.__registered_commands:
                 if command.is_viable_option(command_event.get_command()):

@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
 class Connection:
 
+    REPLY_STATE_TTL_SECONDS = 30
+    DEFAULT_REPLY_TIMEOUT_SECONDS = 5
+
     def __init__(self, main: ConnectionHandler, socket_object: socket.socket, socket_id: str, mode: str = "server",
                  name: str = None):
         self.main = main
@@ -31,10 +34,10 @@ class Connection:
         self.name = name
         self.listening_event_types: list[str] = []
 
-        self.reply_data = ExpiringDict(5)
-        self.reply_lock = ExpiringDict(5)
-        self.reply_callback = ExpiringDict(5)
-        self.reply_arguments = ExpiringDict(5)
+        self.reply_data = ExpiringDict(self.main.reply_state_ttl_seconds)
+        self.reply_lock = ExpiringDict(self.main.reply_state_ttl_seconds)
+        self.reply_callback = ExpiringDict(self.main.reply_state_ttl_seconds)
+        self.reply_arguments = ExpiringDict(self.main.reply_state_ttl_seconds)
 
         self.executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=20)
 
@@ -71,8 +74,11 @@ class Connection:
         message_string = json.dumps(message, ensure_ascii=False) + "<E>"
         self.socket_object.sendall(message_string.encode('utf-8'))
 
-    def send_message(self, message: dict, reply: bool = False, callback: Callable = None, reply_timeout: int = 1,
+    def send_message(self, message: dict, reply: bool = False, callback: Callable = None,
+                     reply_timeout: int | None = None,
                      reply_arguments: typing.Tuple = None) -> dict | None:
+        if reply_timeout is None:
+            reply_timeout = self.main.default_reply_timeout_seconds
         if reply or callback is not None:
             reply = True
             reply_id = str(uuid.uuid4())
@@ -115,7 +121,7 @@ class Connection:
             try:
                 data = self.socket_object.recv(2**10)
                 if not data:
-                    continue
+                    break
                 if data:
                     buffer += data
                     while b"<E>" in buffer:

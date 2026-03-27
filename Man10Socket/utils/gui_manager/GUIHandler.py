@@ -30,7 +30,7 @@ class GUIHandler:
             session = self.get_session(session_id)
 
             event = GUIClickEvent()
-            event.player = self.main.get_player(data.get("player", None))
+            event.player = self.main.get_player(data.get("player", None), connection.name)
             event.slot = data.get("rawSlot", None)
             event.action = data.get("action", None)
             event.click_type = data.get("clickType", None)
@@ -52,7 +52,7 @@ class GUIHandler:
             if data is None:
                 return
             session_id = data.get("id", None)
-            player = self.main.get_player(data.get("player", None))
+            player = self.main.get_player(data.get("player", None), connection.name)
             session = self.get_session(session_id)
             if session is None:
                 return
@@ -65,11 +65,14 @@ class GUIHandler:
         session_id = str(uuid.uuid4())
         gui.session_id = session_id
         gui.gui_handler = self
-        gui.target = player.get_uuid() # change to server name
+        gui.target = player.get_server()
         self.__active_sessions[session_id] = gui
-        socket_connection = self.main.connection_handler.get_socket("Man10Socket")
+        if gui.target is None:
+            print("Socket target is not configured")
+            return None
+        socket_connection = self.main.connection_handler.get_socket(gui.target)
         if socket_connection is None:
-            print("Socket not connected: Man10Socket")
+            print("Socket not connected:", gui.target)
             return None
         a = socket_connection.send_message({
             "target": player.get_uuid(),
@@ -86,9 +89,9 @@ class GUIHandler:
         if gui.session_id not in self.__active_sessions:
             return False
         test = gui.get_json(updated_only=True)
-        socket_connection = self.main.connection_handler.get_socket("Man10Socket")
+        socket_connection = self.main.connection_handler.get_socket(target)
         if socket_connection is None:
-            print("Socket not connected: Man10Socket")
+            print("Socket not connected:", target)
             return False
         a = socket_connection.send_message({
             "type": "gui_update",
