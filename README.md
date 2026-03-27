@@ -39,26 +39,32 @@ UV_CACHE_DIR=.uv-cache UV_PYTHON_INSTALL_DIR=.uv-python uv sync --python 3.9
 
 ## 設定ファイル
 
-`config/config.json` が必須です。  
+`.env` が必須です。  
 まず雛形をコピーしてから値を編集してください。
 
 ```bash
-cp config/config.example.json config/config.json
+cp .env.example .env
 ```
 
 最低限、以下は環境に合わせて変更してください。
 
-- `mongodbConnectionString`
-- `man10socket.hosts`
-- 必要に応じて `man10socket.replyStateTtlSeconds` / `man10socket.defaultReplyTimeoutSeconds`
-- 必要に応じて `man10socket.framingProtocol` / `man10socket.maxFrameBytes`
-- `hostPort`
-- 必要に応じて `api.endpoint` / `api.key`
+- `MONGODB_CONNECTION_STRING`
+- `MAN10SOCKET_HOSTS`
+- 必要に応じて `MAN10SOCKET_REPLY_STATE_TTL_SECONDS` / `MAN10SOCKET_DEFAULT_REPLY_TIMEOUT_SECONDS`
+- 必要に応じて `MAN10SOCKET_FRAMING_PROTOCOL` / `MAN10SOCKET_MAX_FRAME_BYTES`
+- `HOST_PORT`
+- 必要に応じて `API_ENDPOINT` / `API_KEY`
 
-`config.example.json` は Docker Compose 向けに `mongodb://mongodb:27017` を使っています。  
+`.env.example` は Docker Compose 向けに `mongodb://mongodb:27017` を使っています。  
 ローカル実行時は必要に応じて `mongodb://localhost:27017` に変更してください。
 
-`man10socket.framingProtocol` は以下を利用できます。
+`MAN10SOCKET_HOSTS` は `name:host:port` をカンマ区切りで並べます。
+
+```dotenv
+MAN10SOCKET_HOSTS=man10:minecraft:6789,lobby:lobby-host:6790
+```
+
+`MAN10SOCKET_FRAMING_PROTOCOL` は以下を利用できます。
 
 - `delimiter_v1`: 既存の `<E>` 区切り
 - `length_prefix_v2`: 4 バイト長さプレフィックス + UTF-8 JSON
@@ -88,7 +94,7 @@ uv run python main.py
 ## Docker Compose (サンプル)
 
 `docker-compose.yaml` は `app` と `mongodb` のみ起動します。  
-`config/config.json` の `man10socket.hosts` は実サーバー向けに変更してください。
+`.env` の `MAN10SOCKET_HOSTS` は実サーバー向けに変更してください。
 
 ## Docker 起動トラブルシュート
 

@@ -1,10 +1,10 @@
 services:
   man10shopv3:
     image: man10shop:local
-    volumes:
-      - ./man10shop/config:/man10shopv3/config:ro
+    env_file:
+      - ./.env
     ports:
-      - "8000:8000"
+      - "${HOST_PORT:-8000}:${HOST_PORT:-8000}"
     depends_on:
       mongodb:
         condition: service_healthy

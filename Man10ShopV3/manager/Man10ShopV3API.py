@@ -52,7 +52,7 @@ class Man10ShopV3API:
         # "value": value
         while True:
             try:
-                time.sleep(self.main.config["batching"]["setVariableBatchSeconds"])
+                time.sleep(self.main.settings.batching.set_variable_batch_seconds)
 
                 while not self.shop_variable_update_queue.empty():
                     set_variable_request_object = self.shop_variable_update_queue.get()
@@ -85,7 +85,7 @@ class Man10ShopV3API:
         # "data": data
         while True:
             try:
-                time.sleep(self.main.config["batching"]["setVariableBatchSeconds"])
+                time.sleep(self.main.settings.batching.set_variable_batch_seconds)
 
                 while not self.player_data_update_queue.empty():
                     set_variable_request_object = self.player_data_update_queue.get()
@@ -225,14 +225,14 @@ class Man10ShopV3API:
                      return_json: bool = True):
         try:
             req = {}
-            print("req endpoint", self.main.config["api"]["endpoint"].replace("{endpoint}", endpoint) + path)
+            print("req endpoint", self.main.settings.api.endpoint.replace("{endpoint}", endpoint) + path)
             if method == "GET":
-                req = requests.get(self.main.config["api"]["endpoint"].replace("{endpoint}", endpoint) + path,
-                                   data=payload, headers={"Authorization": "Bearer " + self.main.config["api"]["key"]},
+                req = requests.get(self.main.settings.api.endpoint.replace("{endpoint}", endpoint) + path,
+                                   data=payload, headers={"Authorization": "Bearer " + self.main.settings.api.key},
                                    verify=False)
             if method == "POST":
-                req = requests.post(self.main.config["api"]["endpoint"].replace("{endpoint}", endpoint) + path,
-                                    data=payload, headers={"Authorization": "Bearer " + self.main.config["api"]["key"]},
+                req = requests.post(self.main.settings.api.endpoint.replace("{endpoint}", endpoint) + path,
+                                    data=payload, headers={"Authorization": "Bearer " + self.main.settings.api.key},
                                     verify=False)
 
             if req.status_code != 200:
@@ -246,7 +246,7 @@ class Man10ShopV3API:
             return None
 
     def execute_command_in_server(self, endpoint, command, execute_async: bool = False, s_command: bool = True):
-        if self.main.config["communicationMode"] == "socket":
+        if self.main.settings.communication_mode == "socket":
             result = self.main.man10_socket.send_message(endpoint, {"type": "sCommand" if s_command else "command", "command": command, "target": endpoint}, reply=True)
             if result is None:
                 return None

@@ -34,10 +34,10 @@ class StorageFunction(ShopFunction):
         return self.get("item_count")
 
     def get_storage_max_size(self):
-        return self.shop.api.main.config["defaultVariables"]["storage"]["storageSizeMax"]
+        return self.shop.api.main.settings.storage_defaults.storage_size_max
 
     def get_storage_slot_price(self):
-        return self.shop.api.main.config["defaultVariables"]["storage"]["storageSlotPrice"]
+        return self.shop.api.main.settings.storage_defaults.storage_slot_price
 
     def set_item_count(self, amount: int):
         return self.set("item_count", amount)

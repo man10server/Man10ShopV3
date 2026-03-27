@@ -1,4 +1,3 @@
-import json
 import queue
 import time
 import traceback
@@ -6,6 +5,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from threading import Thread
+from typing import Optional
 
 import humps
 import uvicorn
@@ -23,6 +23,7 @@ from Man10ShopV3.methods.shop import ShopMethods
 from Man10Socket import Man10Socket
 from Man10Socket.utils.connection_handler.Connection import Connection
 from menu.action_menu.BuyAndSellActionMenu import BuyAndSellActionMenu
+from utils.EnvConfig import AppSettings, load_settings
 
 
 class Man10ShopV3:
@@ -62,8 +63,8 @@ class Man10ShopV3:
                         player_object = Player().load_from_json(player_data, self)
                         request["player"] = player_object
 
-                    queue_id = uuid.UUID(request["shop_id"]).int % self.config["queue"]["size"]
-                    # if request["key"] == "shop.order" and self.config["queue"]["maxOrders"] != 0 and self.sub_queue[queue_id].qsize() >= self.config["queue"]["maxOrders"]:
+                    queue_id = uuid.UUID(request["shop_id"]).int % self.settings.queue.size
+                    # if request["key"] == "shop.order" and queue limits are enabled:
                     #     continue
                     self.sub_queue[queue_id].put(request)
 
@@ -74,7 +75,7 @@ class Man10ShopV3:
                 continue
 
     def check_rate_limited(self, player_uuid: str):
-        rate = self.config["queue"]["rateLimit"]
+        rate = self.settings.queue.rate_limit
         if rate == 0:
             return False
         current_time = datetime.now().timestamp()
@@ -105,25 +106,23 @@ class Man10ShopV3:
         self.flask = Flask(__name__)
         self.running = True
         self.flask.url_map.strict_slashes = False
-        self.config = {}
+        self.settings: Optional[AppSettings] = None
         self.thread_pool = ThreadPoolExecutor(max_workers=30)
 
         # load config
 
-        config_file = open("config/config.json", encoding="utf-8")
-        self.config = json.loads(config_file.read())
-        config_file.close()
+        self.settings = load_settings()
 
         self.man10_socket = Man10Socket(
             "Man10ShopV3",
-            hosts=self.config["man10socket"]["hosts"],
-            reply_state_ttl_seconds=self.config["man10socket"].get("replyStateTtlSeconds", 30),
-            default_reply_timeout_seconds=self.config["man10socket"].get("defaultReplyTimeoutSeconds", 5),
-            framing_protocol=self.config["man10socket"].get("framingProtocol", "delimiter_v1"),
-            max_frame_bytes=self.config["man10socket"].get("maxFrameBytes", 1024 * 1024),
+            hosts=self.settings.man10socket.hosts,
+            reply_state_ttl_seconds=self.settings.man10socket.reply_state_ttl_seconds,
+            default_reply_timeout_seconds=self.settings.man10socket.default_reply_timeout_seconds,
+            framing_protocol=self.settings.man10socket.framing_protocol,
+            max_frame_bytes=self.settings.man10socket.max_frame_bytes,
         )
 
-        self.mongo = MongoClient(self.config["mongodbConnectionString"])
+        self.mongo = MongoClient(self.settings.mongodb_connection_string)
         # print([x for x in self.mongo["man10shop_v3"]["shops"].find({})])
 
         self.api = Man10ShopV3API(self)
@@ -138,19 +137,19 @@ class Man10ShopV3:
         self.main_queue = queue.Queue(maxsize=0)
         self.sub_queue = {}
         Thread(target=self.main_queue_process).start()
-        for x in range(self.config["queue"]["size"]):
+        for x in range(self.settings.queue.size):
             self.sub_queue[x] = queue.Queue(maxsize=0)
             Thread(target=self.sub_queue_process, args=(x,)).start()
 
         Thread(target=self.process_per_minute_execution_task).start()
 
-        # self.flask.run("0.0.0.0", self.config["hostPort"], threaded=True, debug=False)
+        # self.flask.run("0.0.0.0", self.settings.host_port, threaded=True, debug=False)
         uvicorn.run(
             self.app,
-            port=self.config["hostPort"],
+            port=self.settings.host_port,
             host="0.0.0.0"
         )
         self.running = False
         self.main_queue.put("CLOSE")
-        for x in range(self.config["queue"]["size"]):
+        for x in range(self.settings.queue.size):
             self.sub_queue[x].put("CLOSE")

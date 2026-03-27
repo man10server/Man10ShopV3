@@ -12,11 +12,12 @@ from Man10Socket.utils.gui_manager.GUIHandler import GUIHandler
 from Man10Socket.utils.socket_functions.EventHandlerFunction import EventHandlerFunction
 from Man10Socket.utils.socket_functions.ReplyFunction import ReplyFunction
 from Man10Socket.utils.socket_functions.RequestFunction import RequestFunction
+from utils.EnvConfig import SocketHostSettings
 
 
 class Man10Socket:
 
-    def __init__(self, session_name: str, hosts: list[dict],
+    def __init__(self, session_name: str, hosts: list[SocketHostSettings],
                  reply_state_ttl_seconds: int = Connection.REPLY_STATE_TTL_SECONDS,
                  default_reply_timeout_seconds: int = Connection.DEFAULT_REPLY_TIMEOUT_SECONDS,
                  framing_protocol: str = Connection.DEFAULT_FRAMING_PROTOCOL,
@@ -45,23 +46,23 @@ class Man10Socket:
         self.connection_handler.register_function_on_connect = register_functions
 
         for host in hosts:
-            self.connection_handler.socket_open_server(host["name"], host["host"], host["port"])
+            self.connection_handler.socket_open_server(host.name, host.host, host.port)
 
         self.gui_handler = GUIHandler(self)
 
         def check_open_socket_count_thread():
             while True:
                 for server in self.hosts:
-                    open_sockets = [x for x in self.connection_handler.sockets.values() if x.name == server["name"]]
+                    open_sockets = [x for x in self.connection_handler.sockets.values() if x.name == server.name]
                     if len(open_sockets) < 1:
-                        print("Opening socket", server["name"])
+                        print("Opening socket", server.name)
                         # open sockets until there are enough
-                        open_socket = self.connection_handler.socket_open_server(server["name"], server["host"],
-                                                                                 server["port"])
+                        open_socket = self.connection_handler.socket_open_server(server.name, server.host,
+                                                                                 server.port)
                         if open_socket is None:
-                            print("Failed to open socket", server["name"])
+                            print("Failed to open socket", server.name)
                         else:
-                            self.initialize_connection(server["name"])
+                            self.initialize_connection(server.name)
 
                 time.sleep(1)
 
@@ -72,9 +73,9 @@ class Man10Socket:
 
     def initialize_connected_hosts(self):
         for host in self.hosts:
-            if self.connection_handler.get_socket(host["name"]) is None:
+            if self.connection_handler.get_socket(host.name) is None:
                 continue
-            self.initialize_connection(host["name"])
+            self.initialize_connection(host.name)
 
     def initialize_connection(self, target: str):
         if self.connection_handler.get_socket(target) is None:
@@ -88,7 +89,7 @@ class Man10Socket:
     def get_default_target(self) -> str | None:
         if len(self.hosts) == 0:
             return None
-        return self.hosts[0]["name"]
+        return self.hosts[0].name
 
     def get_player(self, player_uuid: str, server: str | None = None) -> Player|None:
         if player_uuid is None:
