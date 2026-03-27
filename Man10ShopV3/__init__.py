@@ -1,4 +1,3 @@
-import json
 import queue
 import time
 import traceback
@@ -23,6 +22,7 @@ from Man10ShopV3.methods.shop import ShopMethods
 from Man10Socket import Man10Socket
 from Man10Socket.utils.connection_handler.Connection import Connection
 from menu.action_menu.BuyAndSellActionMenu import BuyAndSellActionMenu
+from utils.EnvConfig import load_config
 
 
 class Man10ShopV3:
@@ -110,9 +110,7 @@ class Man10ShopV3:
 
         # load config
 
-        config_file = open("config/config.json", encoding="utf-8")
-        self.config = json.loads(config_file.read())
-        config_file.close()
+        self.config = load_config()
 
         self.man10_socket = Man10Socket(
             "Man10ShopV3",
