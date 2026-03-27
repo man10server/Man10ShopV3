@@ -3,6 +3,8 @@
   "mongodbConnectionString": "mongodb://mongodb:27017",
   "communicationMode": "socket",
   "man10socket": {
+    "replyStateTtlSeconds": 30,
+    "defaultReplyTimeoutSeconds": 5,
     "hosts": [
       {
         "name": "man10",

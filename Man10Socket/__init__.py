@@ -16,11 +16,16 @@ from Man10Socket.utils.socket_functions.RequestFunction import RequestFunction
 
 class Man10Socket:
 
-    def __init__(self, session_name: str, hosts: list[dict]):
+    def __init__(self, session_name: str, hosts: list[dict],
+                 reply_state_ttl_seconds: int = Connection.REPLY_STATE_TTL_SECONDS,
+                 default_reply_timeout_seconds: int = Connection.DEFAULT_REPLY_TIMEOUT_SECONDS):
         self.session_name = session_name
         self.hosts = hosts
 
-        self.connection_handler: ConnectionHandler = ConnectionHandler()
+        self.connection_handler: ConnectionHandler = ConnectionHandler(
+            reply_state_ttl_seconds=reply_state_ttl_seconds,
+            default_reply_timeout_seconds=default_reply_timeout_seconds,
+        )
         self.event_handler = EventHandlerFunction(self.connection_handler)
         self.command_handler = CommandHandler(self)
 
@@ -68,16 +73,25 @@ class Man10Socket:
             self.command_handler.register_all_commands(host["name"])
 
 
-    def get_player(self, player_uuid: str) -> Player|None:
+    def get_default_target(self) -> str | None:
+        if len(self.hosts) == 0:
+            return None
+        return self.hosts[0]["name"]
+
+    def get_player(self, player_uuid: str, server: str | None = None) -> Player|None:
         if player_uuid is None:
             return None
         if player_uuid in self.player_cache:
-            return self.player_cache[player_uuid]
-        player = Player(player_uuid, self)
+            player = self.player_cache[player_uuid]
+            if server is not None:
+                player.set_server(server)
+            return player
+        player = Player(player_uuid, self, server=server)
         self.player_cache[player_uuid] = player
         return player
 
-    def send_message(self, target: str, message: dict, reply: bool = False, callback: typing.Callable = None, reply_timeout: int = 1,
+    def send_message(self, target: str, message: dict, reply: bool = False, callback: typing.Callable = None,
+                     reply_timeout: int | None = None,
                      reply_arguments: typing.Tuple = None):
         socket_connection = self.connection_handler.get_socket(target)
         if socket_connection is None:

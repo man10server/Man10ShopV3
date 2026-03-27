@@ -114,7 +114,12 @@ class Man10ShopV3:
         self.config = json.loads(config_file.read())
         config_file.close()
 
-        self.man10_socket = Man10Socket("Man10ShopV3", hosts=self.config["man10socket"]["hosts"])
+        self.man10_socket = Man10Socket(
+            "Man10ShopV3",
+            hosts=self.config["man10socket"]["hosts"],
+            reply_state_ttl_seconds=self.config["man10socket"].get("replyStateTtlSeconds", 30),
+            default_reply_timeout_seconds=self.config["man10socket"].get("defaultReplyTimeoutSeconds", 5),
+        )
 
         self.mongo = MongoClient(self.config["mongodbConnectionString"])
         # print([x for x in self.mongo["man10shop_v3"]["shops"].find({})])

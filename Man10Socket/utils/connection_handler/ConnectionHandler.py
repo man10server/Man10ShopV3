@@ -15,11 +15,14 @@ if TYPE_CHECKING:
 
 class ConnectionHandler:
 
-    def __init__(self):
+    def __init__(self, reply_state_ttl_seconds: int = Connection.REPLY_STATE_TTL_SECONDS,
+                 default_reply_timeout_seconds: int = Connection.DEFAULT_REPLY_TIMEOUT_SECONDS):
 
         self.sockets: dict[str, Connection] = {}
         self.same_name_sockets: dict[str, list[str]] = {}
         self.get_counter = 0
+        self.reply_state_ttl_seconds = reply_state_ttl_seconds
+        self.default_reply_timeout_seconds = default_reply_timeout_seconds
 
         def empty(connection):
             pass
