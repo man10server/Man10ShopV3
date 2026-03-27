@@ -16,13 +16,21 @@ if TYPE_CHECKING:
 class ConnectionHandler:
 
     def __init__(self, reply_state_ttl_seconds: int = Connection.REPLY_STATE_TTL_SECONDS,
-                 default_reply_timeout_seconds: int = Connection.DEFAULT_REPLY_TIMEOUT_SECONDS):
+                 default_reply_timeout_seconds: int = Connection.DEFAULT_REPLY_TIMEOUT_SECONDS,
+                 framing_protocol: str = Connection.DEFAULT_FRAMING_PROTOCOL,
+                 max_frame_bytes: int = Connection.DEFAULT_MAX_FRAME_BYTES):
 
         self.sockets: dict[str, Connection] = {}
         self.same_name_sockets: dict[str, list[str]] = {}
         self.get_counter = 0
         self.reply_state_ttl_seconds = reply_state_ttl_seconds
         self.default_reply_timeout_seconds = default_reply_timeout_seconds
+        if framing_protocol not in {"delimiter_v1", "length_prefix_v2"}:
+            raise ValueError(f"Unsupported framing protocol: {framing_protocol}")
+        if max_frame_bytes <= 0:
+            raise ValueError(f"max_frame_bytes must be positive: {max_frame_bytes}")
+        self.framing_protocol = framing_protocol
+        self.max_frame_bytes = max_frame_bytes
 
         def empty(connection):
             pass

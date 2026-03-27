@@ -5,6 +5,8 @@
   "man10socket": {
     "replyStateTtlSeconds": 30,
     "defaultReplyTimeoutSeconds": 5,
+    "framingProtocol": "delimiter_v1",
+    "maxFrameBytes": 1048576,
     "hosts": [
       {
         "name": "man10",

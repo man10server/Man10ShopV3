@@ -119,6 +119,8 @@ class Man10ShopV3:
             hosts=self.config["man10socket"]["hosts"],
             reply_state_ttl_seconds=self.config["man10socket"].get("replyStateTtlSeconds", 30),
             default_reply_timeout_seconds=self.config["man10socket"].get("defaultReplyTimeoutSeconds", 5),
+            framing_protocol=self.config["man10socket"].get("framingProtocol", "delimiter_v1"),
+            max_frame_bytes=self.config["man10socket"].get("maxFrameBytes", 1024 * 1024),
         )
 
         self.mongo = MongoClient(self.config["mongodbConnectionString"])
