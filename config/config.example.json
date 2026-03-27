@@ -3,6 +3,8 @@
   "mongodbConnectionString": "mongodb://mongodb:27017",
   "communicationMode": "socket",
   "man10socket": {
+    "framingProtocol": "delimiter_v1",
+    "maxFrameBytes": 1048576,
     "hosts": [
       {
         "name": "man10",

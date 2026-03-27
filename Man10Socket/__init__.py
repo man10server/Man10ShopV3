@@ -16,11 +16,16 @@ from Man10Socket.utils.socket_functions.RequestFunction import RequestFunction
 
 class Man10Socket:
 
-    def __init__(self, session_name: str, hosts: list[dict]):
+    def __init__(self, session_name: str, hosts: list[dict],
+                 framing_protocol: str = Connection.DEFAULT_FRAMING_PROTOCOL,
+                 max_frame_bytes: int = Connection.DEFAULT_MAX_FRAME_BYTES):
         self.session_name = session_name
         self.hosts = hosts
 
-        self.connection_handler: ConnectionHandler = ConnectionHandler()
+        self.connection_handler: ConnectionHandler = ConnectionHandler(
+            framing_protocol=framing_protocol,
+            max_frame_bytes=max_frame_bytes,
+        )
         self.event_handler = EventHandlerFunction(self.connection_handler)
         self.command_handler = CommandHandler(self)
 
@@ -52,20 +57,28 @@ class Man10Socket:
                         if open_socket is None:
                             print("Failed to open socket", server["name"])
                         else:
-                            self.initialize_connection()
+                            self.initialize_connection(server["name"])
 
                 time.sleep(1)
 
         self.check_open_socket_count_thread = Thread(target=check_open_socket_count_thread)
         self.check_open_socket_count_thread.daemon = True
         self.check_open_socket_count_thread.start()
-        self.initialize_connection()
+        self.initialize_connected_hosts()
 
-    def initialize_connection(self):
+    def initialize_connected_hosts(self):
         for host in self.hosts:
-            self.set_session_name(host["name"], self.session_name)
-            self.event_handler.subscribe_to_server(host["name"])
-            self.command_handler.register_all_commands(host["name"])
+            if self.connection_handler.get_socket(host["name"]) is None:
+                continue
+            self.initialize_connection(host["name"])
+
+    def initialize_connection(self, target: str):
+        if self.connection_handler.get_socket(target) is None:
+            return False
+        self.set_session_name(target, self.session_name)
+        self.event_handler.subscribe_to_server(target)
+        self.command_handler.register_all_commands(target)
+        return True
 
 
     def get_player(self, player_uuid: str) -> Player|None:

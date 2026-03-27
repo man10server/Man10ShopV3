@@ -15,11 +15,19 @@ if TYPE_CHECKING:
 
 class ConnectionHandler:
 
-    def __init__(self):
+    def __init__(self,
+                 framing_protocol: str = Connection.DEFAULT_FRAMING_PROTOCOL,
+                 max_frame_bytes: int = Connection.DEFAULT_MAX_FRAME_BYTES):
 
         self.sockets: dict[str, Connection] = {}
         self.same_name_sockets: dict[str, list[str]] = {}
         self.get_counter = 0
+        if framing_protocol not in {"delimiter_v1", "length_prefix_v2"}:
+            raise ValueError(f"Unsupported framing protocol: {framing_protocol}")
+        if max_frame_bytes <= 0:
+            raise ValueError(f"max_frame_bytes must be positive: {max_frame_bytes}")
+        self.framing_protocol = framing_protocol
+        self.max_frame_bytes = max_frame_bytes
 
         def empty(connection):
             pass

@@ -114,7 +114,12 @@ class Man10ShopV3:
         self.config = json.loads(config_file.read())
         config_file.close()
 
-        self.man10_socket = Man10Socket("Man10ShopV3", hosts=self.config["man10socket"]["hosts"])
+        self.man10_socket = Man10Socket(
+            "Man10ShopV3",
+            hosts=self.config["man10socket"]["hosts"],
+            framing_protocol=self.config["man10socket"].get("framingProtocol", "delimiter_v1"),
+            max_frame_bytes=self.config["man10socket"].get("maxFrameBytes", 1024 * 1024),
+        )
 
         self.mongo = MongoClient(self.config["mongodbConnectionString"])
         # print([x for x in self.mongo["man10shop_v3"]["shops"].find({})])

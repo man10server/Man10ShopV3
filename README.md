@@ -50,11 +50,19 @@ cp config/config.example.json config/config.json
 
 - `mongodbConnectionString`
 - `man10socket.hosts`
+- 必要に応じて `man10socket.framingProtocol` / `man10socket.maxFrameBytes`
 - `hostPort`
 - 必要に応じて `api.endpoint` / `api.key`
 
 `config.example.json` は Docker Compose 向けに `mongodb://mongodb:27017` を使っています。  
 ローカル実行時は必要に応じて `mongodb://localhost:27017` に変更してください。
+
+`man10socket.framingProtocol` は以下を利用できます。
+
+- `delimiter_v1`: 既存の `<E>` 区切り
+- `length_prefix_v2`: 4 バイト長さプレフィックス + UTF-8 JSON
+
+`length_prefix_v2` は接続先 Minecraft プラグイン側も同じプロトコルに対応している必要があります。
 
 ## 起動
 
