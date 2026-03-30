@@ -4,7 +4,7 @@ from Man10ShopV3.data_class.ItemStack import ItemStack
 from Man10ShopV3.data_class.OrderRequest import OrderRequest
 from Man10ShopV3.data_class.Player import Player
 from Man10ShopV3.data_class.ShopFunction import ShopFunction
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from Man10ShopV3.data_class.Shop import Shop
@@ -15,13 +15,20 @@ class TargetItemFunction(ShopFunction):
     # variables
 
     def on_function_init(self):
-        self.set_variable("item", ItemStack().get_json(), variable_check=self.on_set_target_item)
+        self.set_variable("item", None, variable_check=self.on_set_target_item)
 
-    def get_target_item(self) -> ItemStack:
-        return ItemStack().from_json(self.get("item"))
+    def get_target_item(self) -> Optional[ItemStack]:
+        item_data = self.get("item")
+        if item_data is None:
+            return None
 
-    def set_target_item(self, item: ItemStack):
-        return self.set("item", item.get_json())
+        item = ItemStack().from_json(item_data)
+        if not item.is_configured():
+            return None
+        return item
+
+    def set_target_item(self, item: Optional[ItemStack]):
+        return self.set("item", None if item is None else item.get_json())
 
     # =========
 
@@ -36,14 +43,27 @@ class TargetItemFunction(ShopFunction):
             return False
         return True
 
+    def require_target_item(self, player: Player) -> Optional[ItemStack]:
+        target_item = self.get_target_item()
+        if target_item is not None:
+            return target_item
+
+        if player is not None:
+            player.warn_message("ショップの商品が設定されていません")
+        return None
+
     def perform_action(self, order: OrderRequest) -> bool:
+        target_item = self.require_target_item(order.player)
+        if target_item is None:
+            return False
+
         if self.shop.get_shop_type() == "BUY":
             if not self.shop.storage_function.remove_item_count(order.amount):
                 order.player.warn_message("内部エラーが発生しました")
                 return False
-            order.player.item_give(self.get_target_item().type_base64, order.amount)  # check for exceptions ?
+            order.player.item_give(target_item.type_base64, order.amount)  # check for exceptions ?
         if self.shop.get_shop_type() == "SELL":
-            item_take_request = order.player.item_take(self.get_target_item().type_base64, order.amount)
+            item_take_request = order.player.item_take(target_item.type_base64, order.amount)
             if not item_take_request.success():
                 order.player.warn_message("買い取るためのアイテムが不足してます")
                 return False
@@ -51,9 +71,12 @@ class TargetItemFunction(ShopFunction):
         return True
 
     def is_allowed_to_use_shop(self, order: OrderRequest) -> bool:
+        target_item = self.require_target_item(order.player)
+        if target_item is None:
+            return False
+
         if self.shop.get_shop_type() == "SELL":
-            check_item_request = order.player.item_check(self.shop.target_item_function.get_target_item().type_base64,
-                                                         order.amount)
+            check_item_request = order.player.item_check(target_item.type_base64, order.amount)
             if not check_item_request.success():
                 order.player.warn_message("買い取るためのアイテムが不足してます")
                 return False
