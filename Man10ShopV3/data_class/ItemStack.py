@@ -1,10 +1,10 @@
 class ItemStack(object):
-    type_base64: str = "H4sIAAAAAAAA/+NiYGBm4HZJLEkMSy0qzszPY2AQjOBgYMpMYRDKzcxLTS5KTCuxyk/Mji/OTM9jZmBNzi/NK2FgYGBkAAC/0pwVOwAAAA=="
-    type_md5: str = "e5314c9cba92af630f609899088a12ab"
+    type_base64: str = "H4sIAAAAAAAA/+NiYGBm4HZJLEkMSy0qzszPY2AQjOBgYMpMYRDNzcxLTS5KTCuxSi9KLC6OT8rJT85mZmBNzi/NK2FgYGBkAADK/sACPgAAAA=="
+    type_md5: str = "adf495fbdab533b8454f40aae0e0d390"
     amount: int = 1
     display_name: str = None
     lore: list = []
-    material: str = "OAK_SIGN"
+    material: str = "GRASS_BLOCK"
     custom_model_data = int = -1
 
     def from_json(self, data: dict):
