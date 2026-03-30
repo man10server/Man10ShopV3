@@ -29,8 +29,12 @@ class BuyAndSellActionMenu(GUI):
 
             })
 
+        target_item = self.shop.target_item_function.get_target_item()
         self.target_item = Item()
-        self.target_item.set_type_base64(self.shop.target_item_function.get_target_item().type_base64)
+        if target_item is None:
+            self.target_item.set_material("BARRIER").set_display_name("§c商品未設定")
+        else:
+            self.target_item.set_type_base64(target_item.type_base64)
         self.set_item(self.target_item, [13])
 
         # right

@@ -29,6 +29,7 @@ class PublicListShopsMethod:
 
                 results = []
                 for shop in shops:
+                    target_item = shop.target_item_function.get_target_item()
                     permission = shop.permission_function.get_permission(player)
                     if shop.delete_function.is_deleted(): continue
                     if permission is None:
@@ -39,7 +40,7 @@ class PublicListShopsMethod:
                         "shopId": shop.get_shop_id(),
                         "name": shop.name_function.get_name(),
                         "shopType": shop.get_shop_type_string(),
-                        "icon": shop.target_item_function.get_target_item().get_icon_json(),
+                        "icon": target_item.get_icon_json() if target_item is not None else None,
                         "permission": permission,
                         "money": shop.money_function.get_money(),
                         "itemCount": shop.storage_function.get_item_count(),
