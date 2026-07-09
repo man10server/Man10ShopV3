@@ -4,10 +4,9 @@ import traceback
 import uuid
 from typing import TYPE_CHECKING, Callable
 
-from expiring_dict import ExpiringDict
-
 from Man10Socket.utils.gui_manager.GUI import GUI
 from Man10Socket.utils.gui_manager.GUIClickEvent import GUIClickEvent
+from Man10Socket.utils.ttl_dict import TTLDict
 
 if TYPE_CHECKING:
     from Man10Socket.data_class.Player import Player
@@ -19,7 +18,7 @@ class GUIHandler:
 
     def __init__(self, main: Man10Socket):
         self.main = main
-        self.__active_sessions = ExpiringDict(60*10)
+        self.__active_sessions = TTLDict(60*10)
 
         @self.main.event_handler.listener("gui_click")
         def on_gui_click(connection: Connection, data: dict):
@@ -102,8 +101,7 @@ class GUIHandler:
         if a is None:
             return False
         if a.get("status", None) == "error_invalid_args_id":
-            if gui.session_id in self.__active_sessions:
-                del self.__active_sessions[gui.session_id]
+            self.__active_sessions.pop(gui.session_id, None)
             return False
         return a.get("status", None) == "success"
 

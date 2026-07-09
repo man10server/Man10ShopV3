@@ -4,8 +4,6 @@ import traceback
 import uuid
 from typing import TYPE_CHECKING, Callable
 
-from expiring_dict import ExpiringDict
-
 if TYPE_CHECKING:
     from Man10Socket import Man10Socket
 
