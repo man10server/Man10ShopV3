@@ -12,9 +12,8 @@ from queue import Queue
 from threading import Thread
 from typing import TYPE_CHECKING, Callable
 
-from expiring_dict import ExpiringDict
-
 from Man10Socket.utils.connection_handler.ConnectionFunction import ConnectionFunction
+from Man10Socket.utils.ttl_dict import TTLDict
 
 if TYPE_CHECKING:
     from Man10Socket.utils.connection_handler.ConnectionHandler import ConnectionHandler
@@ -37,11 +36,12 @@ class Connection:
 
         self.name = name
         self.listening_event_types: list[str] = []
+        self._closed = False
 
-        self.reply_data = ExpiringDict(self.main.reply_state_ttl_seconds)
-        self.reply_lock = ExpiringDict(self.main.reply_state_ttl_seconds)
-        self.reply_callback = ExpiringDict(self.main.reply_state_ttl_seconds)
-        self.reply_arguments = ExpiringDict(self.main.reply_state_ttl_seconds)
+        self.reply_data = TTLDict(self.main.reply_state_ttl_seconds)
+        self.reply_lock = TTLDict(self.main.reply_state_ttl_seconds)
+        self.reply_callback = TTLDict(self.main.reply_state_ttl_seconds)
+        self.reply_arguments = TTLDict(self.main.reply_state_ttl_seconds)
 
         self.executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=20)
 
@@ -54,6 +54,8 @@ class Connection:
             while True:
                 try:
                     message = self.message_queue.get()
+                    if message is None:
+                        break
                     # print("Sent message", message)
                     self.__send_message_internal(message)
                     self.message_queue.task_done()
@@ -118,10 +120,10 @@ class Connection:
             return reply
 
     def clean_reply_data(self, reply_id: str):
-        if reply_id in self.reply_data: del self.reply_data[reply_id]
-        if reply_id in self.reply_lock: del self.reply_lock[reply_id]
-        if reply_id in self.reply_callback: del self.reply_callback[reply_id]
-        if reply_id in self.reply_arguments: del self.reply_arguments[reply_id]
+        self.reply_data.pop(reply_id, None)
+        self.reply_lock.pop(reply_id, None)
+        self.reply_callback.pop(reply_id, None)
+        self.reply_arguments.pop(reply_id, None)
 
     def send_reply_message(self, status: str, message, reply_id: str):
         self.send_message({"type": "reply", "replyId": reply_id, "data": message, "status": status})
@@ -182,6 +184,9 @@ class Connection:
         self.socket_close()
 
     def socket_close(self):
+        if self._closed:
+            return
+        self._closed = True
         try:
             self.socket_object.close()
             if self.socket_id in self.main.sockets:
@@ -198,6 +203,9 @@ class Connection:
             print("Socket closed", self.name)
         except Exception as e:
             print("Error closing socket:", e)
+        finally:
+            self.executor.shutdown(wait=False, cancel_futures=True)
+            self.message_queue.put(None)
 
     def handle_message(self, message: dict):
         message_type = message["type"]

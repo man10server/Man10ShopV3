@@ -4,8 +4,6 @@ import traceback
 import uuid
 from typing import TYPE_CHECKING, Callable
 
-from expiring_dict import ExpiringDict
-
 from Man10Socket.utils.command_manager.Command import Command
 from Man10Socket.utils.command_manager.CommandEvent import CommandEvent
 
