@@ -204,7 +204,7 @@ class Connection:
         except Exception as e:
             print("Error closing socket:", e)
         finally:
-            self.executor.shutdown(wait=False, cancel_futures=True)
+            self.executor.shutdown(wait=False, cancel_futures=False)
             self.message_queue.put(None)
 
     def handle_message(self, message: dict):
