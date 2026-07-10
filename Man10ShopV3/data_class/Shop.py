@@ -164,8 +164,15 @@ class Shop(object):
     # variable
 
     def get_variable(self, key):
-        data = flatten_dict(self.data)
-        return data.get(key)
+        node = self.data
+        parts = key.split(".")
+        for part in parts[:-1]:
+            if not isinstance(node, dict) or part not in node:
+                return None
+            node = node[part]
+        if not isinstance(node, dict):
+            return None
+        return node.get(parts[-1])
 
     def set_variable(self, key, value, update_db=True, player: Player = None, variable_check: bool = True):
         if variable_check and key in self.variable_check:
@@ -177,9 +184,15 @@ class Shop(object):
                 traceback.print_exc()
                 return False
 
-        data = flatten_dict(self.data)
-        data[key] = value
-        self.data = unflatten_dict(data)
+        parts = key.split(".")
+        node = self.data
+        for part in parts[:-1]:
+            if part not in node:
+                node[part] = {}
+            elif not isinstance(node[part], dict):
+                return False
+            node = node[part]
+        node[parts[-1]] = value
 
         if update_db:
             self.api.shop_variable_update_queue.put({
@@ -200,9 +213,15 @@ class Shop(object):
             return True
 
     def set_dynamic_variable(self, key: str, value):
-        data = flatten_dict(self.dynamic_variables)
-        data[key] = value
-        self.dynamic_variables = unflatten_dict(data)
+        parts = key.split(".")
+        node = self.dynamic_variables
+        for part in parts[:-1]:
+            if part not in node:
+                node[part] = {}
+            elif not isinstance(node[part], dict):
+                return False
+            node = node[part]
+        node[parts[-1]] = value
         return True
 
     # base variables
