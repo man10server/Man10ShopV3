@@ -28,7 +28,7 @@ class Connection:
     DEFAULT_MAX_FRAME_BYTES = 1024 * 1024
 
     def __init__(self, main: ConnectionHandler, socket_object: socket.socket, socket_id: str, mode: str = "server",
-                 name: str = None):
+                 name: str = None, autostart: bool = True):
         self.main = main
         self.socket_object = socket_object
         self.socket_id = socket_id
@@ -36,6 +36,9 @@ class Connection:
 
         self.name = name
         self.listening_event_types: list[str] = []
+        self._lifecycle_lock = threading.Lock()
+        self._started = False
+        self._receive_started = False
         self._closed = False
 
         self.reply_data = TTLDict(self.main.reply_state_ttl_seconds)
@@ -52,25 +55,43 @@ class Connection:
 
         def send_message_thread():
             while True:
+                message = self.message_queue.get()
                 try:
-                    message = self.message_queue.get()
                     if message is None:
                         break
                     # print("Sent message", message)
                     self.__send_message_internal(message)
-                    self.message_queue.task_done()
                 except Exception as e:
                     self.socket_close()
                     print(e)
                     break
+                finally:
+                    self.message_queue.task_done()
 
         self.send_message_thread = Thread(target=send_message_thread)
         self.send_message_thread.daemon = True
-        self.send_message_thread.start()
 
         self.client_thread = threading.Thread(target=self.receive_messages)
         self.client_thread.daemon = True
-        self.client_thread.start()
+
+        if autostart:
+            self.start()
+
+    def start(self) -> bool:
+        try:
+            with self._lifecycle_lock:
+                if self._closed:
+                    return False
+                if self._started:
+                    return True
+                self._started = True
+                self.send_message_thread.start()
+                self.client_thread.start()
+                self._receive_started = True
+            return True
+        except Exception:
+            self.socket_close()
+            raise
 
     def register_socket_function(self, socket_function: ConnectionFunction):
         socket_function.main = self.main
@@ -105,7 +126,9 @@ class Connection:
                     response_event = threading.Event()
                     self.reply_lock[reply_id] = response_event
 
-        self.message_queue.put(message)
+        with self._lifecycle_lock:
+            if not self._closed:
+                self.message_queue.put(message)
 
         if reply and callback is None:
             # Wait for the event to be set or timeout after 1 second
@@ -158,54 +181,61 @@ class Connection:
 
     def receive_messages(self):
         buffer = b""
-        while True:
-            try:
-                data = self.socket_object.recv(2**10)
-                if not data:
-                    break
-                buffer += data
-                while True:
-                    message, buffer = self._extract_next_message(buffer)
-                    if message is None:
+        try:
+            while True:
+                try:
+                    data = self.socket_object.recv(2**10)
+                    if not data:
                         break
-                    try:
-                        def task(message_object):
-                            json_message = json.loads(message_object.decode('utf-8'))
-                            self.handle_message(json_message)
+                    buffer += data
+                    while True:
+                        message, buffer = self._extract_next_message(buffer)
+                        if message is None:
+                            break
+                        try:
+                            def task(message_object):
+                                json_message = json.loads(message_object.decode('utf-8'))
+                                self.handle_message(json_message)
 
-                        self.executor.submit(task, message)
-                    except Exception:
-                        print(message)
+                            self.executor.submit(task, message)
+                        except Exception:
+                            print(message)
+                            traceback.print_exc()
+                except Exception as e:
+                    if not self._closed:
+                        print("Error receiving data:", e)
                         traceback.print_exc()
-            except Exception as e:
-                print("Error receiving data:", e)
-                traceback.print_exc()
-                break
-        self.socket_close()
+                    break
+        finally:
+            try:
+                self.socket_close()
+            finally:
+                self.executor.shutdown(wait=False, cancel_futures=False)
 
     def socket_close(self):
-        if self._closed:
-            return
-        self._closed = True
-        try:
-            self.socket_object.close()
-            if self.socket_id in self.main.sockets:
-                del self.main.sockets[self.socket_id]
+        with self._lifecycle_lock:
+            first_close = not self._closed
+            if first_close:
+                self._closed = True
+                try:
+                    self.socket_object.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                try:
+                    self.socket_object.close()
+                except OSError as e:
+                    print("Error closing socket:", e)
+                self.message_queue.put(None)
+                if not self._receive_started:
+                    self.executor.shutdown(wait=False, cancel_futures=False)
 
-            same_name = self.main.same_name_sockets.copy()
+            try:
+                self.main.unregister_connection(self.socket_id)
+            except Exception as e:
+                print("Error closing socket:", e)
 
-            for name in same_name:
-                if self.socket_id in same_name[name]:
-                    self.main.same_name_sockets[name].remove(self.socket_id)
-                    if len(self.main.same_name_sockets[name]) == 0:
-                        del self.main.same_name_sockets[name]
-
-            print("Socket closed", self.name)
-        except Exception as e:
-            print("Error closing socket:", e)
-        finally:
-            self.executor.shutdown(wait=False, cancel_futures=False)
-            self.message_queue.put(None)
+            if first_close:
+                print("Socket closed", self.name)
 
     def handle_message(self, message: dict):
         message_type = message["type"]
