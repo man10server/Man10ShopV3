@@ -62,6 +62,8 @@ class Shop(object):
     def __init__(self, main: Man10ShopV3API):
         self.api = main
         self.data = {}
+        self._variable_revision = 0
+        self._variable_cache = None
         self.functions: dict[str, ShopFunction] = {}
         self.queue_callbacks: dict[str, list[Callable]] = {}
 
@@ -127,17 +129,25 @@ class Shop(object):
         self.register_queue_callback("shop.order", self.accept_order)
 
     def from_json(self, data: dict):
-        self.data = merge_dictionaries(self.data, humps.decamelize(data))
+        self._invalidate_variable_cache()
+        try:
+            self.data = merge_dictionaries(self.data, humps.decamelize(data))
+        finally:
+            self._invalidate_variable_cache()
 
     def get_export_data(self):
-        result = humps.camelize(merge_dictionaries(self.data, self.dynamic_variables))
-        result = flatten_dict(result).copy()
-        for key in self.visible_in_json.keys():
-            if self.visible_in_json[key]: continue
-            key = humps.camelize(key)
-            if key in result: del result[key]
+        self._invalidate_variable_cache()
+        try:
+            result = humps.camelize(merge_dictionaries(self.data, self.dynamic_variables))
+            result = flatten_dict(result).copy()
+            for key in self.visible_in_json.keys():
+                if self.visible_in_json[key]: continue
+                key = humps.camelize(key)
+                if key in result: del result[key]
 
-        return unflatten_dict(result)
+            return unflatten_dict(result)
+        finally:
+            self._invalidate_variable_cache()
     def register_function(self, prefix: str, function: ShopFunction) -> Any:
         function.shop = self
         function.config_prefix = prefix
@@ -163,9 +173,31 @@ class Shop(object):
 
     # variable
 
+    def _invalidate_variable_cache(self):
+        # get_variable must keep the exact legacy flatten_dict semantics. A
+        # revision prevents an older concurrent cache build from becoming a hit.
+        self._variable_revision += 1
+        self._variable_cache = None
+
     def get_variable(self, key):
-        data = flatten_dict(self.data)
-        return data.get(key)
+        cache_entry = self._variable_cache
+        if cache_entry is not None:
+            revision, data, flattened = cache_entry
+            if revision == self._variable_revision and data is self.data:
+                return flattened.get(key)
+
+        revision = self._variable_revision
+        data = self.data
+        # Build the same mapping the old implementation built on every get.
+        flattened = flatten_dict(data)
+        cache_entry = (revision, data, flattened)
+        self._variable_cache = cache_entry
+
+        if revision != self._variable_revision or data is not self.data:
+            if self._variable_cache is cache_entry:
+                self._variable_cache = None
+
+        return flattened.get(key)
 
     def set_variable(self, key, value, update_db=True, player: Player = None, variable_check: bool = True):
         if variable_check and key in self.variable_check:
@@ -177,9 +209,13 @@ class Shop(object):
                 traceback.print_exc()
                 return False
 
-        data = flatten_dict(self.data)
-        data[key] = value
-        self.data = unflatten_dict(data)
+        self._invalidate_variable_cache()
+        try:
+            data = flatten_dict(self.data)
+            data[key] = value
+            self.data = unflatten_dict(data)
+        finally:
+            self._invalidate_variable_cache()
 
         if update_db:
             self.api.shop_variable_update_queue.put({

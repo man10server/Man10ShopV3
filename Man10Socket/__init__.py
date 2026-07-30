@@ -53,7 +53,11 @@ class Man10Socket:
         def check_open_socket_count_thread():
             while True:
                 for server in self.hosts:
-                    open_sockets = [x for x in self.connection_handler.sockets.values() if x.name == server.name]
+                    open_sockets = [
+                        connection
+                        for connection in self.connection_handler.get_connections()
+                        if connection.name == server.name
+                    ]
                     if len(open_sockets) < 1:
                         print("Opening socket", server.name)
                         # open sockets until there are enough
