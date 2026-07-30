@@ -206,7 +206,7 @@ wheels = [
 
 [[package]]
 name = "man10shopv3"
-version = "0.2.3"
+version = "0.2.4"
 source = { virtual = "." }
 dependencies = [
     { name = "cachetools" },
