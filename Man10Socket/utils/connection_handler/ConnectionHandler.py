@@ -15,6 +15,12 @@ if TYPE_CHECKING:
 
 class ConnectionHandler:
 
+    CONNECT_TIMEOUT_SECONDS = 2
+    TCP_KEEPIDLE_SECONDS = 30
+    TCP_KEEPINTERVAL_SECONDS = 10
+    TCP_KEEPCNT = 3
+    TCP_USER_TIMEOUT_MILLISECONDS = 40_000
+
     def __init__(self, reply_state_ttl_seconds: int = Connection.REPLY_STATE_TTL_SECONDS,
                  default_reply_timeout_seconds: int = Connection.DEFAULT_REPLY_TIMEOUT_SECONDS,
                  framing_protocol: str = Connection.DEFAULT_FRAMING_PROTOCOL,
@@ -32,11 +38,16 @@ class ConnectionHandler:
             raise ValueError(f"max_frame_bytes must be positive: {max_frame_bytes}")
         self.framing_protocol = framing_protocol
         self.max_frame_bytes = max_frame_bytes
+        self._socket_option_warning_lock = threading.Lock()
+        self._warned_socket_options: set[str] = set()
 
         def empty(connection):
             pass
 
         self.register_function_on_connect: Callable[[Connection], None] = empty
+        self.connection_registered_callback: Callable[[Connection], None] = empty
+        self.connection_unregistered_callback: Callable[[Connection], None] = empty
+        self.connection_ready_callback: Callable[[Connection], None] = empty
 
     def register_connection(self, connection: Connection):
         with self._registry_lock:
@@ -45,20 +56,87 @@ class ConnectionHandler:
                 socket_ids = self.same_name_sockets.setdefault(connection.name, [])
                 if connection.socket_id not in socket_ids:
                     socket_ids.append(connection.socket_id)
+        self.connection_registered_callback(connection)
 
     def unregister_connection(self, socket_id: str):
+        connection = None
         with self._registry_lock:
-            self.sockets.pop(socket_id, None)
+            connection = self.sockets.pop(socket_id, None)
             for name in list(self.same_name_sockets):
                 socket_ids = self.same_name_sockets[name]
                 if socket_id in socket_ids:
                     socket_ids.remove(socket_id)
                 if len(socket_ids) == 0:
                     del self.same_name_sockets[name]
+        if connection is not None:
+            self.connection_unregistered_callback(connection)
+
+    def _warn_socket_option_once(self, option_name: str, message: str):
+        with self._socket_option_warning_lock:
+            if option_name in self._warned_socket_options:
+                return
+            self._warned_socket_options.add(option_name)
+        print(f"Socket option {option_name} unavailable: {message}")
+
+    def _set_socket_option(
+            self,
+            client_socket: socket.socket,
+            level: int,
+            option: int | None,
+            value: int,
+            option_name: str,
+    ):
+        if option is None:
+            self._warn_socket_option_once(option_name, "not exposed by this platform")
+            return
+        try:
+            client_socket.setsockopt(level, option, value)
+        except OSError as exception:
+            self._warn_socket_option_once(option_name, str(exception))
+
+    def _configure_server_socket(self, client_socket: socket.socket):
+        self._set_socket_option(client_socket, socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1, "SO_KEEPALIVE")
+
+        keepidle_option = getattr(socket, "TCP_KEEPIDLE", None)
+        if keepidle_option is None:
+            keepidle_option = getattr(socket, "TCP_KEEPALIVE", None)
+
+        self._set_socket_option(
+            client_socket,
+            socket.IPPROTO_TCP,
+            keepidle_option,
+            self.TCP_KEEPIDLE_SECONDS,
+            "TCP_KEEPIDLE",
+        )
+        self._set_socket_option(
+            client_socket,
+            socket.IPPROTO_TCP,
+            getattr(socket, "TCP_KEEPINTVL", None),
+            self.TCP_KEEPINTERVAL_SECONDS,
+            "TCP_KEEPINTVL",
+        )
+        self._set_socket_option(
+            client_socket,
+            socket.IPPROTO_TCP,
+            getattr(socket, "TCP_KEEPCNT", None),
+            self.TCP_KEEPCNT,
+            "TCP_KEEPCNT",
+        )
+        self._set_socket_option(
+            client_socket,
+            socket.IPPROTO_TCP,
+            getattr(socket, "TCP_USER_TIMEOUT", None),
+            self.TCP_USER_TIMEOUT_MILLISECONDS,
+            "TCP_USER_TIMEOUT",
+        )
 
     def get_connections(self) -> list[Connection]:
         with self._registry_lock:
             return list(self.sockets.values())
+
+    def is_registered(self, connection: Connection) -> bool:
+        with self._registry_lock:
+            return self.sockets.get(connection.socket_id) is connection
 
     def socket_open_server(self, name, host, port) -> socket.socket | None:
         socket_id = str(uuid.uuid4())
@@ -66,8 +144,10 @@ class ConnectionHandler:
         connection = None
         try:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+            self._configure_server_socket(client_socket)
+            client_socket.settimeout(self.CONNECT_TIMEOUT_SECONDS)
             client_socket.connect((host, port))
+            client_socket.settimeout(None)
             print("Socket opened", name)
             connection = Connection(self, client_socket, socket_id=socket_id, mode="server", name=name,
                                     autostart=False)

@@ -118,6 +118,7 @@ class Man10ShopV3:
             hosts=self.settings.man10socket.hosts,
             reply_state_ttl_seconds=self.settings.man10socket.reply_state_ttl_seconds,
             default_reply_timeout_seconds=self.settings.man10socket.default_reply_timeout_seconds,
+            heartbeat_timeout_seconds=self.settings.man10socket.heartbeat_timeout_seconds,
             framing_protocol=self.settings.man10socket.framing_protocol,
             max_frame_bytes=self.settings.man10socket.max_frame_bytes,
         )

@@ -18,6 +18,8 @@ class EventHandlerFunction(ConnectionFunction):
     def __init__(self, main: ConnectionHandler):
         super().__init__()
         self.main = main
+        self.listeners = {}
+        self.listening_event_types = []
 
     def information(self):
         self.name = "Event Handler Function"
@@ -39,7 +41,7 @@ class EventHandlerFunction(ConnectionFunction):
         if socket_connection is None:
             print("Socket not connected for event subscribe:", target)
             return None
-        return socket_connection.send_message({"type": "event_subscribe", "event_types": self.listening_event_types}, reply=True)
+        return socket_connection.send_message({"type": "event_subscribe", "event_types": self.listening_event_types})
 
     def listener(self, event_type: str, subscribe_to_server: bool = False):
         if event_type not in self.listening_event_types:

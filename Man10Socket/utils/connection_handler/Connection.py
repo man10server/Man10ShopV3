@@ -4,6 +4,7 @@ import json
 import socket
 import struct
 import threading
+import time
 import traceback
 import typing
 import uuid
@@ -23,6 +24,9 @@ class Connection:
 
     REPLY_STATE_TTL_SECONDS = 30
     DEFAULT_REPLY_TIMEOUT_SECONDS = 5
+    DEFAULT_HEARTBEAT_TIMEOUT_SECONDS = 6
+    MIN_HEARTBEAT_TIMEOUT_SECONDS = 6
+    MAX_HEARTBEAT_TIMEOUT_SECONDS = 300
     LEGACY_DELIMITER = b"<E>"
     DEFAULT_FRAMING_PROTOCOL = "delimiter_v1"
     DEFAULT_MAX_FRAME_BYTES = 1024 * 1024
@@ -40,6 +44,17 @@ class Connection:
         self._started = False
         self._receive_started = False
         self._closed = False
+        self._heartbeat_lock = threading.Lock()
+        self._opened_at = time.monotonic()
+        self._inbound_activity_seen = False
+        self._heartbeat_supported = False
+        self._heartbeat_stable_since: float | None = None
+        self._last_heartbeat_at: float | None = None
+        self._last_inbound_activity = time.monotonic()
+        self._heartbeat_timeout_seconds: int | None = None
+        self._heartbeat_timed_out = False
+        self._heartbeat_activity_sequence = 0
+        self._heartbeat_timeout_suspect_sequence: int | None = None
 
         self.reply_data = TTLDict(self.main.reply_state_ttl_seconds)
         self.reply_lock = TTLDict(self.main.reply_state_ttl_seconds)
@@ -97,6 +112,16 @@ class Connection:
         socket_function.main = self.main
         self.functions[socket_function.function_type] = socket_function
 
+    def is_closed(self) -> bool:
+        with self._lifecycle_lock:
+            return self._closed
+
+    def has_been_open_for(self, seconds: int, now: float | None = None) -> bool:
+        if now is None:
+            now = time.monotonic()
+        with self._lifecycle_lock:
+            return not self._closed and now - self._opened_at >= seconds
+
     def __send_message_internal(self, message: dict):
         payload = json.dumps(message, ensure_ascii=False).encode("utf-8")
         if len(payload) > self.main.max_frame_bytes:
@@ -151,6 +176,106 @@ class Connection:
     def send_reply_message(self, status: str, message, reply_id: str):
         self.send_message({"type": "reply", "replyId": reply_id, "data": message, "status": status})
 
+    def record_inbound_activity(
+            self,
+            heartbeat: bool = False,
+            heartbeat_timeout_seconds: int | None = None,
+            now: float | None = None,
+    ):
+        if now is None:
+            now = time.monotonic()
+        first_activity = False
+        with self._heartbeat_lock:
+            if self._heartbeat_timed_out or self._closed:
+                return
+            first_activity = not self._inbound_activity_seen
+            self._inbound_activity_seen = True
+            self._last_inbound_activity = now
+            self._heartbeat_activity_sequence += 1
+            self._heartbeat_timeout_suspect_sequence = None
+            if heartbeat:
+                self._heartbeat_supported = True
+                if (
+                        isinstance(heartbeat_timeout_seconds, int)
+                        and not isinstance(heartbeat_timeout_seconds, bool)
+                        and self.MIN_HEARTBEAT_TIMEOUT_SECONDS
+                        <= heartbeat_timeout_seconds
+                        <= self.MAX_HEARTBEAT_TIMEOUT_SECONDS
+                ):
+                    self._heartbeat_timeout_seconds = heartbeat_timeout_seconds
+                heartbeat_continuity_seconds = (
+                    self._heartbeat_timeout_seconds or self.DEFAULT_HEARTBEAT_TIMEOUT_SECONDS
+                )
+                if (
+                        self._last_heartbeat_at is None
+                        or now - self._last_heartbeat_at > heartbeat_continuity_seconds
+                ):
+                    self._heartbeat_stable_since = now
+                self._last_heartbeat_at = now
+        if first_activity:
+            self.main.connection_ready_callback(self)
+
+    def close_if_heartbeat_timed_out(
+            self,
+            timeout_seconds: int,
+            now: float | None = None,
+            before_close: Callable[[float], None] | None = None,
+    ) -> float | None:
+        if timeout_seconds <= 0:
+            return None
+        if now is None:
+            now = time.monotonic()
+
+        with self._heartbeat_lock:
+            if self._closed or self._heartbeat_timed_out or not self._heartbeat_supported:
+                return None
+            inactive_seconds = now - self._last_inbound_activity
+            effective_timeout_seconds = max(
+                self._heartbeat_timeout_seconds or timeout_seconds,
+                timeout_seconds,
+            )
+            if inactive_seconds <= effective_timeout_seconds:
+                self._heartbeat_timeout_suspect_sequence = None
+                return None
+            if self._heartbeat_timeout_suspect_sequence != self._heartbeat_activity_sequence:
+                self._heartbeat_timeout_suspect_sequence = self._heartbeat_activity_sequence
+                return None
+            self._heartbeat_timed_out = True
+
+        try:
+            if before_close is not None:
+                before_close(inactive_seconds)
+        finally:
+            self.socket_close()
+        return inactive_seconds
+
+    def has_stable_heartbeat_for(
+            self,
+            stable_seconds: int,
+            timeout_seconds: int,
+            now: float | None = None,
+    ) -> bool:
+        if now is None:
+            now = time.monotonic()
+        with self._heartbeat_lock:
+            if (
+                    not self._heartbeat_supported
+                    or self._heartbeat_stable_since is None
+                    or self._last_heartbeat_at is None
+                    or self._heartbeat_timed_out
+                    or self._closed
+            ):
+                return False
+            heartbeat_continuity_seconds = self._heartbeat_timeout_seconds or timeout_seconds
+            return (
+                    now - self._heartbeat_stable_since >= stable_seconds
+                    and now - self._last_heartbeat_at <= heartbeat_continuity_seconds
+            )
+
+    def supports_heartbeat(self) -> bool:
+        with self._heartbeat_lock:
+            return self._heartbeat_supported
+
     def _extract_next_message(self, buffer: bytes) -> tuple[bytes | None, bytes]:
         if self.main.framing_protocol == "length_prefix_v2":
             if len(buffer) < 4:
@@ -193,11 +318,24 @@ class Connection:
                         if message is None:
                             break
                         try:
-                            def task(message_object):
-                                json_message = json.loads(message_object.decode('utf-8'))
+                            json_message = json.loads(message.decode('utf-8'))
+                            is_heartbeat = json_message.get("type") == "heartbeat"
+                            heartbeat_generation = json_message.get("generation")
+                            is_valid_heartbeat = (
+                                    is_heartbeat
+                                    and json_message.get("heartbeatVersion") == 1
+                                    and isinstance(heartbeat_generation, str)
+                                    and 0 < len(heartbeat_generation) <= 64
+                            )
+                            self.record_inbound_activity(
+                                heartbeat=is_valid_heartbeat,
+                                heartbeat_timeout_seconds=json_message.get("leaseSeconds"),
+                            )
+                            if is_heartbeat:
+                                # Heartbeats must not wait behind business work in the executor.
                                 self.handle_message(json_message)
-
-                            self.executor.submit(task, message)
+                            else:
+                                self.executor.submit(self.handle_message, json_message)
                         except Exception:
                             print(message)
                             traceback.print_exc()

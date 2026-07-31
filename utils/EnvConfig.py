@@ -16,6 +16,7 @@ class Man10SocketSettings:
     hosts: list[SocketHostSettings]
     reply_state_ttl_seconds: int
     default_reply_timeout_seconds: int
+    heartbeat_timeout_seconds: int
     framing_protocol: str
     max_frame_bytes: int
 
@@ -136,6 +137,7 @@ def load_settings(env_path: str = ".env") -> AppSettings:
             hosts=_parse_hosts(_require(merged_values, "MAN10SOCKET_HOSTS")),
             reply_state_ttl_seconds=_get_int(merged_values, "MAN10SOCKET_REPLY_STATE_TTL_SECONDS", 30),
             default_reply_timeout_seconds=_get_int(merged_values, "MAN10SOCKET_DEFAULT_REPLY_TIMEOUT_SECONDS", 5),
+            heartbeat_timeout_seconds=_get_int(merged_values, "MAN10SOCKET_HEARTBEAT_TIMEOUT_SECONDS", 6),
             framing_protocol=merged_values.get("MAN10SOCKET_FRAMING_PROTOCOL", "delimiter_v1"),
             max_frame_bytes=_get_int(merged_values, "MAN10SOCKET_MAX_FRAME_BYTES", 1024 * 1024),
         ),
