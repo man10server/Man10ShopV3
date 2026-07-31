@@ -1,6 +1,6 @@
 [project]
 name = "man10shopv3"
-version = "0.2.4"
+version = "0.2.5"
 description = "Man10ShopV3 service for Minecraft"
 requires-python = ">=3.9,<3.10"
 dependencies = [
